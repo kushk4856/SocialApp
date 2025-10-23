@@ -12,17 +12,28 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
+} from "../../components/ui/form";
 import { Input } from "../../components/ui/input";
 import { SignupValidation } from "../../lib/validation";
 import Loader from "../../components/shared/Loader";
-import { Link } from "react-router-dom";
-import { createUserAccount } from "../../lib/appwrite/api";
+import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../../hooks/use-toast";
+import {
+  useCreateUserAccount,
+  useSignInAccount,
+} from "../../lib/tanstack/queriesAndMutation";
+import { useUserContext } from "../../contexts/AuthContext";
 
 const SingupForm = () => {
-  const {toast} = useToast()
-  const isLoading = false;
+  const { toast } = useToast();
+  const { checkAuthUser, isLoading: isUserLoading } = useUserContext();
+  const navigate = useNavigate();
+
+  const { mutateAsync: createUserAccount, isPending: isCreatingAccount } =
+    useCreateUserAccount();
+
+  const { mutateAsync: signInAccount, isPending: isSignIn } =
+    useSignInAccount();
 
   // 1. Define your form.
   const form = useForm<z.infer<typeof SignupValidation>>({
@@ -38,15 +49,31 @@ const SingupForm = () => {
   // 2. Define a submit handler.
   async function onSubmit(values: z.infer<typeof SignupValidation>) {
     const newUser = await createUserAccount(values);
-   
-    if(!newUser) {
+
+    if (!newUser) {
       return toast({
-        title: "Sign up failed. Please try again."
+        title: "Sign up failed. Please try again.",
       });
     }
 
-    // const session = await signInAccount()
-    
+    const session = await signInAccount({
+      email: values.email,
+      password: values.password,
+    });
+
+    if (!session) {
+      return toast({ title: "Sign in failed. Please try again." });
+      
+    }
+
+    const isLoggedIn = await checkAuthUser();
+
+    if (isLoggedIn) {
+      form.reset();
+      navigate("/");
+    } else {
+      toast({ title: "Sign up failed, Please try again." });
+    }
   }
 
   return (
@@ -93,7 +120,7 @@ const SingupForm = () => {
               </FormItem>
             )}
           />
-           <FormField
+          <FormField
             control={form.control}
             name="email"
             render={({ field }) => (
@@ -107,7 +134,7 @@ const SingupForm = () => {
               </FormItem>
             )}
           />
-           <FormField
+          <FormField
             control={form.control}
             name="password"
             render={({ field }) => (
@@ -122,20 +149,24 @@ const SingupForm = () => {
             )}
           />
           <Button type="submit" className="shad-button_primary">
-            {
-              isLoading ? (
-                <div className="flex-center gap-2">
-                  <Loader/> Loading..
-                </div>
-              ): "Sign up"
-            }
+            {isCreatingAccount ? (
+              <div className="flex-center gap-2">
+                <Loader /> Loading..
+              </div>
+            ) : (
+              "Sign up"
+            )}
           </Button>
 
-            <p className="text-small-regular text-light-2 text-center mt-2">
-              Already have an account?
-              <Link to="/sign-in" className="text-primary-500 text-small-smibold ml-1">Log in</Link>
-            </p>
-
+          <p className="text-small-regular text-light-2 text-center mt-2">
+            Already have an account?
+            <Link
+              to="/sign-in"
+              className="text-primary-500 text-small-smibold ml-1"
+            >
+              Log in
+            </Link>
+          </p>
         </form>
       </div>
     </Form>
